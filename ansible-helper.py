@@ -31,11 +31,13 @@ def myinput(prompt, prefill):
 class argset:
 
     def __init__(self):
+        self.options = []
+        self.remainder = []
         self.argname = []
         self.optdash = []
         self.longlist = []
         self.shortlist = ''
-        self.extravars = []
+        self.extravars = {}
         self.extraname = []
         self.checkarg = False
         self.printarg = False
@@ -51,6 +53,7 @@ class argset:
         self.cryptfilearg = False
         self.passvararg = False
         self.saveFileKey = None
+        self.readFileKey = None
         self.factSearchKey = None
         self.cryptFileName = None
         self.passVarName = None
@@ -68,13 +71,31 @@ class argset:
         self.addArg("f", "fact", False)
         self.addArg("e", "cryptfile", False)
         self.addArg("P", "passvar", False)
+        self.playSaveContents = {}
+        self.playReadFile = None
+        self.saveFileVersion = 4
+        self.playBasename = None
+
+        if os.getenv('helper_data_directory'):
+            self.playSaveDir = os.getenv('helper_data_directory')
+        else:
+            self.playSaveDir = os.path.expanduser("~") + "/.ansible-helper"
 
         try:
             self.playbook = sys.argv[1]
             sys.argv.pop(1)
+            self.playBasename = os.path.basename(self.playbook)
         except IndexError as e:
             print("Playbook should be first argument. Can not open playbook: %s" % str(e))
             sys.exit(1)
+
+        try:
+            nextArg = sys.argv[1]
+            if nextArg == "-r":
+                self.readFileKey = sys.argv[2]
+                self.readarg = True
+        except Exception:
+            pass
 
     def print_help(self, *args):
         if args:
@@ -104,12 +125,12 @@ class argset:
     def parseArgs(self):
 
         try:
-            options, remainder = getopt.getopt(sys.argv[1:], self.shortlist, self.longlist)
+            self.options, self.remainder = getopt.getopt(sys.argv[1:], self.shortlist, self.longlist)
         except getopt.GetoptError as e:
             print("Can not parse arguments: %s" % str(e))
             self.print_help()
 
-        for opt, arg in options:
+        for opt, arg in self.options:
             if opt in ('-?', '--help'):
                 self.print_help()
             elif opt in ('-c', '--check'):
@@ -137,18 +158,18 @@ class argset:
                 self.vaultarg = True
                 self.passVarName = arg
             elif opt in ('-p', '--print'):
-                if len(options) != 1:
+                if len(self.options) != 1:
                     print("Print option can not be combined with other options.")
                     sys.exit(1)
                 self.printarg = True
                 self.printArgs()
             elif opt in ('-l', '--list'):
-                if len(options) != 1:
+                if len(self.options) != 1:
                     print("List option can not be combined with other options.")
                     sys.exit(1)
                 self.listarg = True
             elif opt in ('-s', '--save'):
-                if len(options) != 1:
+                if len(self.options) != 1:
                     print("Save option can not be combined with other options.")
                     sys.exit(1)
                 if re.findall('[^a-zA-Z0-9-_]', arg):
@@ -157,19 +178,15 @@ class argset:
                 self.savearg = True
                 self.saveFileKey = arg
             elif opt in ('-r', '--read'):
-                if len(options) != 1 and self.checkarg == False and self.debugarg == False:
-                    print("Read option can not be combined with other options.")
-                    sys.exit(1)
                 self.readarg = True
                 self.saveFileKey = arg
             elif opt in self.optdash:
                 optname = opt.strip('--')
                 argstring = arg.replace('\\', '\\\\')
                 extravaritem = '"' + optname + '":"' + argstring + '"'
-                self.extravars.append(extravaritem)
+                self.extravars[optname] = extravaritem
 
     def parsePlaybook(self):
-
         try:
             with open(self.playbook, 'r') as yamlfile:
                 for line in yamlfile:
@@ -188,20 +205,60 @@ class argset:
                 print (self.optdash[x])
             sys.exit(0)
 
+    def storeSavedPlay(self):
+        if self.readarg:
+            self.playReadFile = self.playSaveDir + "/" + self.readFileKey + ".json"
+            if os.path.exists(self.playReadFile):
+                try:
+                    with open(self.playReadFile, 'r') as saveFile:
+                        try:
+                            saveData = json.load(saveFile)
+                        except ValueError as e:
+                            print("Save file does not contain valid JSON data: %s" % str(e))
+                            sys.exit(1)
+                        saveFileIter = iter(saveData)
+                        for key in saveData:
+                            if key == 'saveFileVersion':
+                                if saveData[key] != self.saveFileVersion:
+                                    print("Save file version error, file version %s required version %s" % (saveData[key], self.saveFileVersion))
+                                    sys.exit(1)
+                                continue
+                            if key == 'playbookBaseName':
+                                if saveData[key] != self.playBasename:
+                                    print("Playbook name mismatch, got %s expecting %s" % (saveData[key], self.playBasename))
+                                    sys.exit(1)
+                                continue
+                            self.playSaveContents[key] = saveData[key]
+                    saveFile.close()
+                except OSError as e:
+                    print("Could not read save file: %s" % str(e))
+                    sys.exit(1)
+
+                for key in self.playSaveContents['options']:
+                    saveParamvalue = self.playSaveContents['options'][key]
+                    extravaritem = '"' + key + '":"' + saveParamvalue + '"'
+                    self.extravars[key] = extravaritem
+
 class playrun:
 
     def __init__(self, argclass):
 
         self.runargs = argclass
-        self.saveFileVersion = 3
         self.playDirname = os.path.dirname(self.runargs.playbook)
         if not self.playDirname:
             self.playDirname = '.'
-        self.playBasename = os.path.basename(self.runargs.playbook)
+        self.playBasename = self.runargs.playBasename
         self.playName = os.path.splitext(self.playBasename)[0]
-        self.playSaveFile = self.playDirname + "/" + self.playName + ".save"
-        self.playSaveContents = {}
+        self.playSaveDir = self.runargs.playSaveDir
         self.vaultPasswordFile = None
+        self.playSaveFile = None
+
+        if not os.path.exists(self.playSaveDir):
+            try:
+                os.makedirs(self.playSaveDir, mode=0o770)
+            except OSError as e:
+                print("Can not make directory: %s" % str(e))
+                sys.exit(1)
 
         if os.getenv('ANSIBLE_CONFIG'):
             self.ansibleConfig = os.getenv('ANSIBLE_CONFIG')
@@ -237,89 +294,47 @@ class playrun:
                 sys.exit(1)
 
     def listSavedPlays(self):
-        self.storeSavedPlay()
-        if self.playSaveContents:
-            print("Saved plays for %s" % self.playBasename)
-            for key in self.playSaveContents:
-                print("- %s" % key)
-                for subkey in self.playSaveContents[key]:
-                    print("  - %s => %s (prompt=%s)" % (subkey, self.playSaveContents[key][subkey]['value'], self.playSaveContents[key][subkey]['prompt']))
-        else:
-            print("No save files have been created for playbook.")
-            print("%s not found" % self.playSaveFile)
-
-    def readSavedPlay(self):
-        self.storeSavedPlay()
-        if not self.runargs.saveFileKey in self.playSaveContents:
-            print("Scenario %s not saved for playbook %s" % (self.runargs.saveFileKey, self.playBasename))
-            sys.exit(1)
-        key = self.runargs.saveFileKey
-        for subkey in self.playSaveContents[key]:
-            saveParamvalue = self.playSaveContents[key][subkey]['value']
-            promptParam = self.playSaveContents[key][subkey]['prompt']
-            if promptParam == 'true':
-                answer = myinput(subkey + ": ", saveParamvalue)
-                answer = answer.rstrip("\n")
-                saveParamvalue = answer
-            extravaritem = '"' + subkey + '":"' + saveParamvalue + '"'
-            self.runargs.extravars.append(extravaritem)
-
-    def storeSavedPlay(self):
-        if os.path.exists(self.playSaveFile):
-            try:
-                with open(self.playSaveFile, 'r') as saveFile:
+        if os.path.exists(self.playSaveDir):
+            count = 1
+            for fileName in os.listdir(self.playSaveDir):
+                listFile = self.playSaveDir + "/" + fileName
+                if os.path.isfile(listFile):
                     try:
-                        saveData = json.load(saveFile)
-                    except ValueError as e:
-                        print("Save file does not contain valid JSON data: %s" % str(e))
+                        with open(listFile, 'r') as saveFile:
+                            try:
+                                saveData = json.load(saveFile)
+                            except ValueError as e:
+                                print("Warning: skipping %s: file does not contain JSON data" % fileName)
+                                continue
+
+                        for key in saveData:
+                            if key == 'playbookBaseName':
+                                if saveData[key] == self.playBasename:
+                                    print("%d) %s" % (count, os.path.splitext(fileName)[0]))
+                                    count = count + 1
+
+                    except OSError as e:
+                        print("Could not read file: %s" % str(e))
                         sys.exit(1)
-                    saveFileIter = iter(saveData)
-                    for key in saveData:
-                        if key == 'saveFileVersion':
-                            if saveData[key] != self.saveFileVersion:
-                                print("Save file version error, file version %s required version %s" % (saveData[key], self.saveFileVersion))
-                                sys.exit(1)
-                            continue
-                        if key == 'playbookBaseName':
-                            if saveData[key] != self.playBasename:
-                                print("Playbook name mismatch, got %s expecting %s" % (saveData[key], self.playBasename))
-                                sys.exit(1)
-                            continue
-                        self.playSaveContents[key] = saveData[key]
-            except OSError as e:
-                print("Could not read save file: %s" % str(e))
-                sys.exit(1)
 
     def savePlay(self):
 
         if not self.runargs.saveFileKey:
             raise ErrorExit("savePlay: Error: saveFileKey not defined")
-        self.storeSavedPlay()
+
+        self.playSaveFile = self.playSaveDir + "/" + self.runargs.saveFileKey + ".json"
+
         try:
-            saveData = {"saveFileVersion" : self.saveFileVersion, "playbookBaseName" : self.playBasename}
-            if self.playSaveContents:
-                for key in self.playSaveContents:
-                    saveData[key] = self.playSaveContents[key]
-            if not self.runargs.saveFileKey in saveData:
-                saveData[self.runargs.saveFileKey] = {}
+            saveData = {"saveFileVersion" : self.runargs.saveFileVersion, "playbookBaseName" : self.playBasename}
+            saveData['options'] = {}
+
             with open(self.playSaveFile, 'w') as saveFile:
                 for x in range(len(self.runargs.extraname)):
                     inputOptText = input(self.runargs.extraname[x] + ": ")
                     inputOptText = inputOptText.rstrip("\n")
                     if inputOptText != '':
-                        optText = self.runargs.extraname[x]
-                        paramBlock = {optText : {}}
-                        inputPromptText = input("Prompt? (y/n) [n]: ")
-                        inputPromptText = inputPromptText.rstrip("\n")
-                        keyValueOpt = { 'value' : inputOptText }
-                        if inputPromptText == 'y':
-                            promptValue = 'true'
-                        else:
-                            promptValue = 'false'
-                        keyValuePrompt = { 'prompt' : promptValue }
-                        paramBlock[optText].update(keyValueOpt)
-                        paramBlock[optText].update(keyValuePrompt)
-                        saveData[self.runargs.saveFileKey].update(paramBlock)
+                        paramBlock = { self.runargs.extraname[x] : inputOptText }
+                        saveData['options'].update(paramBlock)
                 json.dump(saveData, saveFile, indent=4)
                 saveFile.write("\n")
                 saveFile.close()
@@ -339,21 +354,31 @@ class playrun:
         if self.runargs.askarg:
             try:
                 inputPassword = getpass.getpass()
+                checkPassword = getpass.getpass(prompt='Confirm password: ')
             except Exception as e:
                 print("Can not read password input: %s" % str(e))
             else:
+                if inputPassword != checkPassword:
+                    print("Passwords do not match")
+                    sys.exit(1)
                 extravaritem = '"ask_password":"' + inputPassword + '"'
-                self.runargs.extravars.append(extravaritem)
+                self.runargs.extravars['ask_password'] = extravaritem
 
         if self.runargs.passvararg:
             extravaritem = '"password_var":"' + self.runargs.passVarName + '"'
-            self.runargs.extravars.append(extravaritem)
+            self.runargs.extravars['password_var'] = extravaritem
 
         if self.runargs.extravars:
+            optCount = len(self.runargs.extravars)
+            count = 1
             extravarjson = '\'{'
-            for x in range(len(self.runargs.extravars)-1):
-                extravarjson = extravarjson + self.runargs.extravars[x] + ','
-            extravarjson = extravarjson + self.runargs.extravars[-1] + '}\''
+            for key in self.runargs.extravars:
+                if count == optCount:
+                    extravarjson = extravarjson + self.runargs.extravars[key] + '}\''
+                else:
+                    extravarjson = extravarjson + self.runargs.extravars[key] + ','
+                    count = count + 1
+
             extravarexec = '--extra-vars ' + extravarjson
         else:
             extravarexec = ''
@@ -408,6 +433,7 @@ def main():
 
     runArgs = argset()
     runArgs.parsePlaybook()
+    runArgs.storeSavedPlay()
     runArgs.parseArgs()
 
     playRun = playrun(runArgs)
@@ -415,9 +441,6 @@ def main():
         playRun.listSavedPlays()
     elif runArgs.savearg:
         playRun.savePlay()
-    elif runArgs.readarg:
-        playRun.readSavedPlay()
-        playRun.runPlay()
     else:
         playRun.runPlay()
 
