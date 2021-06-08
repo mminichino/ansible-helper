@@ -190,12 +190,26 @@ class argset:
         try:
             with open(self.playbook, 'r') as yamlfile:
                 for line in yamlfile:
-                    if line.startswith('#') and 'var:' in line:
-                        varline = line.split(':')
-                        if (len(varline) > 1):
-                            variable = varline[1].rstrip("\n")
-                            self.addArg(None, variable, False)
-                            self.extraname.append(variable)
+                    if line.startswith('#'):
+                        if 'var:' in line:
+                            varline = line.split(':')
+                            if (len(varline) > 1):
+                                variable = varline[1].rstrip("\n")
+                                self.addArg(None, variable, False)
+                                self.extraname.append(variable)
+                        if 'option:' in line:
+                            optline = line.split(':')
+                            if (len(optline) > 1):
+                                option = optline[1].rstrip("\n")
+                                if option == 'quiet':
+                                    self.quietarg = True
+                                elif option == 'dense':
+                                    os.environ['ANSIBLE_STDOUT_CALLBACK'] = 'community.general.dense'
+                                elif option == 'selective':
+                                    os.environ['ANSIBLE_STDOUT_CALLBACK'] = 'selective'
+                                else:
+                                    print("Unsupported option: %s" % option)
+                                    sys.exit(1)
         except OSError as e:
             print("Can not open playbook: %s" % str(e))
             sys.exit(1)
