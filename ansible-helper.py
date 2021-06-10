@@ -248,6 +248,28 @@ class argset:
                     print("Could not read save file: %s" % str(e))
                     sys.exit(1)
 
+                for key in self.playSaveContents['params']:
+                    saveParamvalue = self.playSaveContents['params'][key]
+                    if key == 'ask':
+                        if saveParamvalue:
+                            self.askarg = True
+                    if key == 'passvar':
+                        if saveParamvalue:
+                            self.passvararg = True
+                            self.vaultarg = True
+                            self.passVarName = saveParamvalue
+                    if key == 'cryptfile':
+                        if saveParamvalue:
+                            self.cryptfilearg = True
+                            self.vaultarg = True
+                            self.cryptFileName = saveParamvalue
+                    if key == 'debug':
+                        if saveParamvalue:
+                            self.debugarg = True
+                    if key == 'quiet':
+                        if saveParamvalue:
+                            self.quietarg = True
+
                 for key in self.playSaveContents['options']:
                     saveParamvalue = self.playSaveContents['options'][key]
                     extravaritem = '"' + key + '":"' + saveParamvalue + '"'
@@ -341,8 +363,42 @@ class playrun:
         try:
             saveData = {"saveFileVersion" : self.runargs.saveFileVersion, "playbookBaseName" : self.playBasename}
             saveData['options'] = {}
+            saveData['params'] = {}
+            saveData['params'].update({'ask': False})
+            saveData['params'].update({'passvar': None})
+            saveData['params'].update({'cryptfile':None})
+            saveData['params'].update({'debug': False})
+            saveData['params'].update({'quiet': False})
 
             with open(self.playSaveFile, 'w') as saveFile:
+                answer = input("Customize parameters? (y/n) [n]: ")
+                answer = answer.rstrip("\n")
+                if answer == 'y':
+                    answer = input("Ask for password? (y/n) [n]: ")
+                    answer = answer.rstrip("\n")
+                    if answer == 'y':
+                        paramBlock = {'ask':True}
+                        saveData['params'].update(paramBlock)
+                    answer = input("Password variable? [None]: ")
+                    answer = answer.rstrip("\n")
+                    if len(answer) > 0:
+                        paramBlock = {'passvar':answer}
+                        saveData['params'].update(paramBlock)
+                    answer = input("Vault file? [None]: ")
+                    answer = answer.rstrip("\n")
+                    if len(answer) > 0:
+                        paramBlock = {'cryptfile':answer}
+                        saveData['params'].update(paramBlock)
+                    answer = input("Enable debug output? (y/n) [n]: ")
+                    answer = answer.rstrip("\n")
+                    if answer == 'y':
+                        paramBlock = {'debug':True}
+                        saveData['params'].update(paramBlock)
+                    answer = input("Enable quiet (JSON) output? (y/n) [n]: ")
+                    answer = answer.rstrip("\n")
+                    if answer == 'y':
+                        paramBlock = {'quiet':True}
+                        saveData['params'].update(paramBlock)
                 for x in range(len(self.runargs.extraname)):
                     inputOptText = input(self.runargs.extraname[x] + ": ")
                     inputOptText = inputOptText.rstrip("\n")
