@@ -312,10 +312,10 @@ class playrun:
                 with open(self.ansibleConfig, 'r') as configFile:
                     while True:
                        line = configFile.readline()
+                       if len(line) == 0:
+                           break
                        line = line.replace(" ", "")
                        line = line.rstrip("\n")
-                       if not line:
-                           break
                        if not line.startswith("#"):
                            try:
                                key,value = line.split("=")
