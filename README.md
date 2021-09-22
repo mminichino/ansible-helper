@@ -19,6 +19,7 @@ Option | Description
 -a | Prompt for password (if the playbook is designed for password integration - see below)
 -P | Retrieve password from the supplied variable in Ansible Vault (another password integration option)
 -h | Run playbook on this host or hosts, separate multiple hosts with a comma (if supported by the playbook - see below)
+-S | Dynamic inventory script - use host (-h) parameter to supply the script path (see Ansible documentation on writing dynamic inventory scripts)
 -v | Force the use of Ansible Vault (if not auto detected - it will prompt for the vault password if it can not be automatically located)
 -f | Run playbook and search for the fact supplied, and if found print the value - useful for playbooks designed to return a value
 --cryptfile | path to Ansible Vault encrypted file
