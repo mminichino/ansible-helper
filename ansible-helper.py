@@ -48,6 +48,7 @@ class argset:
         self.askarg = False
         self.quietarg = False
         self.vaultarg = False
+        self.scriptarg = False
         self.hostarg = False
         self.factarg = False
         self.cryptfilearg = False
@@ -65,6 +66,7 @@ class argset:
         self.addArg("a", "ask", True)
         self.addArg("q", "quiet", True)
         self.addArg("v", "vault", True)
+        self.addArg("S", "script", True)
         self.addArg("s", "save", False)
         self.addArg("r", "read", False)
         self.addArg("h", "host", False)
@@ -143,6 +145,8 @@ class argset:
                 self.quietarg = True
             elif opt in ('-v', '--vault'):
                 self.vaultarg = True
+            elif opt in ('-S', '--script'):
+                self.scriptarg = True
             elif opt in ('-h', '--host'):
                 self.hostarg = True
                 self.runHostName = arg
@@ -456,7 +460,10 @@ class playrun:
         cmdlist.append("ansible-playbook")
         if self.runargs.hostarg:
             cmdlist.append('-i')
-            cmdlist.append(self.runargs.runHostName + ',')
+            if self.runargs.scriptarg:
+                cmdlist.append(self.runargs.runHostName)
+            else:
+                cmdlist.append(self.runargs.runHostName + ',')
         cmdlist.append(self.runargs.playbook)
         if not self.vaultPasswordFile and self.runargs.vaultarg:
             cmdlist.append('--ask-vault-pass')
