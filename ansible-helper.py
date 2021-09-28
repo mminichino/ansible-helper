@@ -78,6 +78,11 @@ class argset:
         self.saveFileVersion = 4
         self.playBasename = None
 
+        if 'HELPER_PATH' in os.environ:
+            self.playSearchPath = os.environ['HELPER_PATH'].split(':')
+        else:
+            self.playSearchPath = []
+
         if os.getenv('helper_data_directory'):
             self.playSaveDir = os.getenv('helper_data_directory')
         else:
@@ -86,6 +91,13 @@ class argset:
         try:
             self.playbook = sys.argv[1]
             sys.argv.pop(1)
+            if not os.path.isfile(self.playbook):
+                for x in range(len(self.playSearchPath)):
+                    if os.path.isfile(self.playSearchPath[x] + "/" + self.playbook):
+                        self.playbook = self.playSearchPath[x] + "/" + self.playbook
+            if not os.path.isfile(self.playbook):
+                print("Playbook not found: %s" % self.playbook)
+                sys.exit(1)
             self.playBasename = os.path.basename(self.playbook)
         except IndexError as e:
             print("Playbook should be first argument. Can not open playbook: %s" % str(e))
