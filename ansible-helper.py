@@ -473,6 +473,14 @@ class playrun:
         if self.runargs.hostarg:
             cmdlist.append('-i')
             if self.runargs.scriptarg:
+                if not os.path.isfile(self.runargs.runHostName):
+                    if os.path.isfile(os.path.dirname(self.runargs.playbook) + "/" + self.runargs.runHostName):
+                        self.runargs.runHostName = os.path.dirname(self.runargs.playbook) + "/" + self.runargs.runHostName
+                    elif os.path.isfile(os.path.dirname(os.path.dirname(self.runargs.playbook)) + "/" + self.runargs.runHostName):
+                        self.runargs.runHostName = os.path.dirname(os.path.dirname(self.runargs.playbook)) + "/" + self.runargs.runHostName
+                if not os.path.isfile(self.runargs.runHostName):
+                    print("Inventory script not found: %s" % self.runargs.runHostName)
+                    sys.exit(1)
                 cmdlist.append(self.runargs.runHostName)
             else:
                 cmdlist.append(self.runargs.runHostName + ',')
