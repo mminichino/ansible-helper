@@ -49,6 +49,7 @@ class argset:
         self.quietarg = False
         self.vaultarg = False
         self.scriptarg = False
+        self.jsonarg = False
         self.hostarg = False
         self.factarg = False
         self.cryptfilearg = False
@@ -67,6 +68,7 @@ class argset:
         self.addArg("q", "quiet", True)
         self.addArg("v", "vault", True)
         self.addArg("S", "script", True)
+        self.addArg("j", "json", True)
         self.addArg("s", "save", False)
         self.addArg("r", "read", False)
         self.addArg("h", "host", False)
@@ -159,6 +161,8 @@ class argset:
                 self.vaultarg = True
             elif opt in ('-S', '--script'):
                 self.scriptarg = True
+            elif opt in ('-j', '--json'):
+                self.jsonarg = True
             elif opt in ('-h', '--host'):
                 self.hostarg = True
                 self.runHostName = arg
@@ -219,6 +223,8 @@ class argset:
                                 option = optline[1].rstrip("\n")
                                 if option == 'quiet':
                                     self.quietarg = True
+                                elif option == 'json':
+                                    self.jsonarg = True
                                 elif option == 'dense':
                                     os.environ['ANSIBLE_STDOUT_CALLBACK'] = 'community.general.dense'
                                 elif option == 'selective':
@@ -436,6 +442,9 @@ class playrun:
 
         if self.runargs.quietarg:
             os.environ['ANSIBLE_STDOUT_CALLBACK'] = 'minimal'
+
+        if self.runargs.jsonarg:
+            os.environ['ANSIBLE_STDOUT_CALLBACK'] = 'ansible.posix.json'
 
         if self.runargs.askarg:
             try:
